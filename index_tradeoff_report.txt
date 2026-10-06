@@ -1,0 +1,23 @@
+# BÁO CÁO ĐÁNH ĐỔI HIỆU NĂNG VÀ TỐI ƯU HÓA LEAN INDEX - SMARTFACTORY
+
+## 1. Phân tích tác hại của "Fat Covering Index"
+Việc đưa tất cả các cột (`temperature`, `humidity`, `status`) vào `idx_fat_covering` tạo ra một Covering Index giúp câu lệnh `SELECT` lấy dữ liệu cực nhanh mà không cần Clustered Index Lookup. Tuy nhiên, trong hệ thống IoT với hàng chục nghìn lượt ghi mỗi giây, việc này gây ra thảm họa:
+* **Write Penalty (Chi phí Ghi):** Mỗi lần ghi một bản ghi mới hoặc nhiệt độ thay đổi, MySQL phải cập nhật và tái sắp xếp nút (Node Splitting) trên cây B-Tree của Index. Việc chứa các cột dữ liệu thay đổi liên tục khiến chi phí I/O tăng gấp nhiều lần, gây ra nghẽn luồng INSERT.
+* **Storage Overhead:** Kích thước Index phình to hơn cả dữ liệu bảng gốc, tiêu tốn bộ nhớ đĩa SSD trên Cloud và chiếm trọn RAM Buffer Pool.
+
+## 2. Giải pháp Lean Index và Đánh đổi (Trade-off)
+Chúng ta chấp nhận xóa `idx_fat_covering` và thay bằng `idx_lean_search(sensor_id, recorded_at)`.
+* **Đánh đổi về Read:** Câu lệnh `SELECT` sẽ mất đi tính chất "Covering Index" (cột `Extra` trong `EXPLAIN` không còn dòng `Using index`). MySQL phải mất thêm một bước nhảy Lookup vào bảng gốc để lấy `temperature`, `humidity`, `status`. Tốc độ Đọc giảm khoảng vài phần nghìn giây.
+* **Lợi ích thu về:** Tốc độ `INSERT` tăng gấp 4–5 lần, giải phóng tới 60–70% dung lượng `INDEX_LENGTH`, đưa hệ thống IoT thoát khỏi nguy cơ tràn bộ nhớ và rớt bản ghi (Data Loss).
+
+---
+
+## 3. Trả lời câu hỏi vấn đáp với Cloud Financial Controller
+1. **Nếu bảng dữ liệu là 'Danh mục quốc gia' (Countries) ít sửa đổi thì Covering Index có phải 'tội ác' không?**
+   * **Trả lời:** Không. Bảng danh mục có tần suất Ghi cực thấp và dung lượng nhỏ, việc dùng Covering Index giúp tối ưu tốc độ Đọc đến mức tối đa mà không gây ảnh hưởng đến hiệu năng Ghi hay dung lượng lưu trữ.
+
+2. **Giải thích khái niệm 'Write Penalty' khi chèn dữ liệu vào bảng có Index?**
+   * **Trả lời:** Write Penalty là chi phí thời gian và tài nguyên bổ sung mà MySQL phải trả khi thực hiện ghi (`INSERT`/`UPDATE`/`DELETE`). Khi chèn 1 dòng mới, ngoài việc ghi dữ liệu thực, MySQL phải tìm đúng vị trí, duy trì thứ tự và phân tách trang (Page Split) trên tất cả các cây B-Tree của chỉ mục phụ.
+
+3. **Thay thế `VARCHAR(20)` của cột `status` thành `TINYINT` có tác dụng gì nếu lỡ đưa vào Index?**
+   * **Trả lời:** `VARCHAR(20)` tốn tới 21–81 bytes (tùy charset), trong khi `TINYINT` chỉ tốn 1 byte. Việc đổi sang `TINYINT` giúp thu nhỏ độ rộng khóa (Key Length), giảm đáng kể `INDEX_LENGTH` và giúp chứa được nhiều nút Index hơn trên mỗi Page RAM.

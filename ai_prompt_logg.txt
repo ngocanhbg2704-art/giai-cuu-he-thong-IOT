@@ -1,0 +1,22 @@
+# NHẬT KÝ TƯƠNG TÁC VỚI AI (PROMPT LOG)
+
+## Prompt 1: Giải thích khái niệm Covering Index và tác hại với bài toán IoT
+* **User Prompt:** "Giải thích cơ chế của Covering Index trong MySQL InnoDB. Tại sao một Covering Index chứa nhiều cột lại gây hại nghiêm trọng cho hệ thống IoT có tần suất ghi cao (High-frequency Writes)?"
+* **Bài học rút ra:** 
+  - Covering Index chứa đủ dữ liệu mà truy vấn `SELECT` cần, giúp tránh thao tác Clustered Index Lookup.
+  - Tuy nhiên, với hệ thống IoT có lượng `INSERT` lớn, việc duy trì cây B-Tree lớn chứa nhiều cột làm gia tăng Random I/O và nghẽn bộ nhớ Buffer Pool.
+
+---
+
+## Prompt 2: So sánh Clustered Index và Secondary Index
+* **User Prompt:** "Sự khác biệt giữa Clustered Index (Primary Key) và Secondary Index trong InnoDB là gì? Khi Secondary Index không bao phủ hết các cột trong câu lệnh SELECT thì MySQL xử lý như thế nào?"
+* **Bài học rút ra:** 
+  - Clustered Index lưu trữ toàn bộ dòng dữ liệu thực tế.
+  - Secondary Index chỉ lưu các cột được index + giá trị của Primary Key. Nếu truy vấn lấy cột không có trong Secondary Index, MySQL dùng Primary Key để dò lại bảng gốc (Bookmark/Table Lookup).
+
+---
+
+## Prompt 3: Tính toán dung lượng Byte của kiểu dữ liệu
+* **User Prompt:** "So sánh mức tiêu thụ bộ nhớ giữa VARCHAR(20) utf8mb4 và TINYINT trong chỉ mục của MySQL."
+* **Bài học rút ra:** 
+  - `VARCHAR(20)` có thể tốn đến $20 \times 4 + 1 = 81$ bytes, trong khi `TINYINT` chỉ tốn 1 byte. Việc tối ưu kiểu dữ liệu giúp thu nhỏ đáng kể kích thước Index.
